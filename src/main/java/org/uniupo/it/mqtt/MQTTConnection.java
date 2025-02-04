@@ -11,6 +11,7 @@ import java.io.FileInputStream;
 import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.UUID;
 
 public class MQTTConnection {
     private static MQTTConnection instance;
@@ -18,7 +19,7 @@ public class MQTTConnection {
     private static final Dotenv dotenv = Dotenv.configure().load();
 
     private static final String BROKER_URL = "ssl://broker.emqx.io:8883";
-    private static final String CLIENT_ID = "amministrazione-backend";
+    private static final String CLIENT_ID = "amministrazione-backend"+ UUID.randomUUID();
     private static final String CA_CERT_PATH = dotenv.get("CA_CERT_PATH");
 
     private MQTTConnection() {

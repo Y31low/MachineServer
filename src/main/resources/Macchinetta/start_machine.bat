@@ -14,11 +14,11 @@ if "%2"=="" (
 )
 
 :: Avvia AssistanceService e aspetta 5 secondi
-start java -jar AssistanceService-1.0-SNAPSHOT-jar-with-dependencies.jar %INSTITUTE_ID% %MACHINE_ID%
+start cmd /k java -jar "%~dp0AssistanceService-1.0-SNAPSHOT-jar-with-dependencies.jar" %INSTITUTE_ID% %MACHINE_ID%
 timeout /t 5
 
 :: Avvia gli altri servizi
-start java -jar BalanceService-1.0-SNAPSHOT-jar-with-dependencies.jar %INSTITUTE_ID% %MACHINE_ID%
-start java -jar DispenserService-1.0-SNAPSHOT-jar-with-dependencies.jar %INSTITUTE_ID% %MACHINE_ID%
-start java -jar FrontendService-1.0-SNAPSHOT-jar-with-dependencies.jar %INSTITUTE_ID% %MACHINE_ID%
-start java -jar TrasnactionService-1.0-SNAPSHOT-jar-with-dependencies.jar %INSTITUTE_ID% %MACHINE_ID%
+start cmd /k java -jar "%~dp0BalanceService-1.0-SNAPSHOT-jar-with-dependencies.jar" %INSTITUTE_ID% %MACHINE_ID%
+start cmd /k java -jar "%~dp0DispenserService-1.0-SNAPSHOT-jar-with-dependencies.jar" %INSTITUTE_ID% %MACHINE_ID%
+start cmd /k java -jar "%~dp0FrontendService-1.0-SNAPSHOT-jar-with-dependencies.jar" %INSTITUTE_ID% %MACHINE_ID%
+start cmd /k java -jar "%~dp0TrasnactionService-1.0-SNAPSHOT-jar-with-dependencies.jar" %INSTITUTE_ID% %MACHINE_ID%
