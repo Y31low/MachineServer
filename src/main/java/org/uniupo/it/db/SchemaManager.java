@@ -1,0 +1,188 @@
+package org.uniupo.it.db;
+
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+public class SchemaManager {
+
+    private static final String CREATE_SCHEMA = "CREATE SCHEMA IF NOT EXISTS machine_%s_%s";
+
+    private static final String CREATE_CONSUMABLE_TYPE =
+            "DO $$ BEGIN " +
+                    "    CREATE TYPE machine_%s_%s.\"ConsumableType\" AS ENUM " +
+                    "    ('MILK', 'CHOCOLATE', 'SUGAR', 'CUP', 'SPOON', 'TEA', 'COFFEE'); " +
+                    "EXCEPTION " +
+                    "    WHEN duplicate_object THEN null; " +
+                    "END $$;";
+
+    private static final String CREATE_FAULT_TYPE =
+            "DO $$ BEGIN " +
+                    "    CREATE TYPE machine_%s_%s.fault_type AS ENUM " +
+                    "    ('CONSUMABILE_TERMINATO', 'CASSA_PIENA', 'GUASTO_GENERICO'); " +
+                    "EXCEPTION " +
+                    "    WHEN duplicate_object THEN null; " +
+                    "END $$;";
+
+    private static final String[] TABLE_CREATION = {
+            "CREATE TABLE IF NOT EXISTS machine_%s_%s.\"Drink\" (" +
+                    "    code text NOT NULL," +
+                    "    price numeric NOT NULL," +
+                    "    description text NOT NULL," +
+                    "    name text NOT NULL," +
+                    "    CONSTRAINT \"Drink_pkey\" PRIMARY KEY (code)" +
+                    ")",
+
+            "CREATE TABLE IF NOT EXISTS machine_%s_%s.\"Fault\" (" +
+                    "    description text NOT NULL," +
+                    "    id_fault uuid NOT NULL," +
+                    "    \"timestamp\" timestamp without time zone NOT NULL," +
+                    "    fault_type machine_%s_%s.fault_type NOT NULL," +
+                    "    risolto boolean DEFAULT false," +
+                    "    CONSTRAINT \"Fault_pkey\" PRIMARY KEY (id_fault)" +
+                    ")",
+
+            "CREATE TABLE IF NOT EXISTS machine_%s_%s.\"Machine\" (" +
+                    "    \"totalBalance\" numeric NOT NULL DEFAULT 0," +
+                    "    \"maxBalance\" numeric NOT NULL DEFAULT 200," +
+                    "    \"faultStatus\" boolean NOT NULL DEFAULT false," +
+                    "    \"totalCredit\" numeric DEFAULT 0" +
+                    ")",
+
+            "CREATE TABLE IF NOT EXISTS machine_%s_%s.consumable (" +
+                    "    name machine_%s_%s.\"ConsumableType\" NOT NULL," +
+                    "    quantity integer NOT NULL," +
+                    "    \"maxQuantity\" integer NOT NULL," +
+                    "    CONSTRAINT consumable_pkey PRIMARY KEY (name)," +
+                    "    CONSTRAINT consumable_name_name1_key UNIQUE (name)" +
+                    ")",
+
+            "CREATE TABLE IF NOT EXISTS machine_%s_%s.\"Recipe\" (" +
+                    "    \"drinkCode\" text NOT NULL," +
+                    "    \"consumableName\" machine_%s_%s.\"ConsumableType\" NOT NULL," +
+                    "    \"consumableQuantity\" integer NOT NULL," +
+                    "    CONSTRAINT \"Recipe_pkey\" PRIMARY KEY (\"drinkCode\", \"consumableName\")," +
+                    "    CONSTRAINT \"Recipe_drinkCode_fkey\" FOREIGN KEY (\"drinkCode\")" +
+                    "        REFERENCES machine_%s_%s.\"Drink\" (code) ON DELETE CASCADE ON UPDATE CASCADE," +
+                    "    CONSTRAINT \"Recipe_consumableName_fkey\" FOREIGN KEY (\"consumableName\")" +
+                    "        REFERENCES machine_%s_%s.consumable (name) ON DELETE CASCADE ON UPDATE CASCADE" +
+                    ")",
+
+            "CREATE TABLE IF NOT EXISTS machine_%s_%s.\"Transaction\" (" +
+                    "    \"transactionId\" serial NOT NULL," +
+                    "    \"timeStamp\" timestamp without time zone NOT NULL," +
+                    "    \"drinkCode\" text NOT NULL," +
+                    "    \"sugarQuantity\" integer NOT NULL," +
+                    "    CONSTRAINT \"Transaction_pkey\" PRIMARY KEY (\"transactionId\")" +
+                    ")"
+    };
+
+    private static final String[][] INITIAL_CONSUMABLES = {
+            {"COFFEE", "100", "100"},
+            {"MILK", "100", "100"},
+            {"CHOCOLATE", "100", "100"},
+            {"SUGAR", "1000", "1000"},
+            {"CUP", "100", "100"},
+            {"SPOON", "100", "100"},
+            {"TEA", "100", "100"}
+    };
+
+    private static final String[][] INITIAL_DRINKS = {
+            {"ESPRESSO", "Espresso coffee", "1.0", "1"},
+            {"CAPPUCCINO", "Cappuccino with milk", "1.5", "2"},
+            {"MOCHA", "Mocha with chocolate", "2.0", "3"},
+            {"TEA", "Hot tea", "1.0", "4"}
+    };
+
+    private static final String[][] INITIAL_RECIPES = {
+            {"1", "COFFEE", "1"},
+            {"2", "COFFEE", "1"},
+            {"2", "MILK", "1"},
+            {"3", "COFFEE", "1"},
+            {"3", "MILK", "1"},
+            {"3", "CHOCOLATE", "1"},
+            {"4", "TEA", "1"}
+    };
+
+    public static void createSchemaForMachine(String instituteId, String machineId) {
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            conn.setAutoCommit(false);
+
+            // Create schema
+            String schemaName = String.format("machine_%s_%s", instituteId, machineId);
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute(String.format(CREATE_SCHEMA, instituteId, machineId));
+
+                // Create custom types
+                stmt.execute(String.format(CREATE_CONSUMABLE_TYPE, instituteId, machineId));
+                stmt.execute(String.format(CREATE_FAULT_TYPE, instituteId, machineId));
+
+                // Create tables
+                for (String tableQuery : TABLE_CREATION) {
+                    stmt.execute(String.format(tableQuery, instituteId, machineId, instituteId, machineId,
+                            instituteId, machineId, instituteId, machineId));
+                }
+
+                // Insert initial consumables
+                String insertConsumable = String.format(
+                        "INSERT INTO machine_%s_%s.consumable (name, quantity, \"maxQuantity\") VALUES (CAST(? AS machine_%s_%s.\"ConsumableType\"), ?, ?)",
+                        instituteId, machineId, instituteId, machineId
+                );
+                try (PreparedStatement ps = conn.prepareStatement(insertConsumable)) {
+                    for (String[] consumable : INITIAL_CONSUMABLES) {
+                        ps.setString(1, consumable[0]);
+                        ps.setInt(2, Integer.parseInt(consumable[1]));
+                        ps.setInt(3, Integer.parseInt(consumable[2]));
+                        ps.executeUpdate();
+                    }
+                }
+
+                // Insert initial drinks
+                String insertDrink = String.format(
+                        "INSERT INTO machine_%s_%s.\"Drink\" (name, description, price, code) VALUES (?, ?, ?, ?)",
+                        instituteId, machineId
+                );
+                try (PreparedStatement ps = conn.prepareStatement(insertDrink)) {
+                    for (String[] drink : INITIAL_DRINKS) {
+                        ps.setString(1, drink[0]);
+                        ps.setString(2, drink[1]);
+                        ps.setBigDecimal(3, new java.math.BigDecimal(drink[2]));
+                        ps.setString(4, drink[3]);
+                        ps.executeUpdate();
+                    }
+                }
+
+                // Insert initial recipes
+                String insertRecipe = String.format(
+                        "INSERT INTO machine_%s_%s.\"Recipe\" (\"drinkCode\", \"consumableName\", \"consumableQuantity\") " +
+                                "VALUES (?, CAST(? AS machine_%s_%s.\"ConsumableType\"), ?)",
+                        instituteId, machineId, instituteId, machineId
+                );
+                try (PreparedStatement ps = conn.prepareStatement(insertRecipe)) {
+                    for (String[] recipe : INITIAL_RECIPES) {
+                        ps.setString(1, recipe[0]);
+                        ps.setString(2, recipe[1]);
+                        ps.setInt(3, Integer.parseInt(recipe[2]));
+                        ps.executeUpdate();
+                    }
+                }
+
+                // Insert default Machine values
+                String insertMachine = String.format(
+                        "INSERT INTO machine_%s_%s.\"Machine\" (\"totalBalance\", \"maxBalance\", \"faultStatus\", \"totalCredit\") " +
+                                "VALUES (0, 200, false, 0) " +
+                                "ON CONFLICT DO NOTHING",
+                        instituteId, machineId
+                );
+                stmt.execute(insertMachine);
+            }
+
+            conn.commit();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error creating schema for machine: " + e.getMessage());
+        }
+    }
+}
