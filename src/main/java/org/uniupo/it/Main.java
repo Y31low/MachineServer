@@ -11,6 +11,11 @@ public class Main {
                 String[] topicParts = topic.split("/");
                 String instituteId = topicParts[1];
                 String machineId = topicParts[2];
+
+                String batFilePath = "src/main/resources/Macchinetta/start_machine.bat";
+                ProcessBuilder processBuilder = new ProcessBuilder(batFilePath, instituteId, machineId);
+
+                processBuilder.start();
             });
         } catch (MqttException e) {
             throw new RuntimeException(e);
