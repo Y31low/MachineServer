@@ -17,6 +17,7 @@ public class Main {
                 ProcessBuilder processBuilder = new ProcessBuilder(batFilePath, instituteId, machineId);
 
 
+
                 processBuilder.start();
             });
         } catch (MqttException e) {
