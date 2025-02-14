@@ -1,13 +1,14 @@
 package org.uniupo.it.db;
 
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 public class SchemaManager {
 
+    private static final String CHECK_SCHEMA_EXISTS = "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'machine_%s_%s'";
     private static final String CREATE_SCHEMA = "CREATE SCHEMA IF NOT EXISTS machine_%s_%s";
 
     private static final String CREATE_CONSUMABLE_TYPE =
@@ -27,6 +28,7 @@ public class SchemaManager {
                     "END $$;";
 
     private static final String[] TABLE_CREATION = {
+            // Table creation queries remain the same as before
             "CREATE TABLE IF NOT EXISTS machine_%s_%s.\"Drink\" (" +
                     "    code text NOT NULL," +
                     "    price numeric NOT NULL," +
@@ -34,7 +36,7 @@ public class SchemaManager {
                     "    name text NOT NULL," +
                     "    CONSTRAINT \"Drink_pkey\" PRIMARY KEY (code)" +
                     ")",
-
+            // ... other table creation queries remain the same
             "CREATE TABLE IF NOT EXISTS machine_%s_%s.\"Fault\" (" +
                     "    description text NOT NULL," +
                     "    id_fault uuid NOT NULL," +
@@ -90,99 +92,162 @@ public class SchemaManager {
     };
 
     private static final String[][] INITIAL_DRINKS = {
-            {"ESPRESSO", "Espresso coffee", "1.0", "1"},
+            {"ESPRESSO", "Classic espresso coffee", "1.0", "1"},
             {"CAPPUCCINO", "Cappuccino with milk", "1.5", "2"},
             {"MOCHA", "Mocha with chocolate", "2.0", "3"},
-            {"TEA", "Hot tea", "1.0", "4"}
+            {"TEA", "Hot tea", "1.0", "4"},
+            {"DOUBLE_ESPRESSO", "Double shot espresso", "1.8", "5"},
+            {"HOT_CHOCOLATE", "Rich hot chocolate", "2.0", "6"},
+            {"COFFEE_WITH_MILK", "Coffee with extra milk", "1.5", "7"},
+            {"MOCACCINO", "Coffee with milk and extra chocolate", "2.2", "8"}
     };
 
     private static final String[][] INITIAL_RECIPES = {
-            {"1", "COFFEE", "1"},
-            {"2", "COFFEE", "1"},
+            {"1", "COFFEE", "1"},     // Espresso
+            {"2", "COFFEE", "1"},     // Cappuccino
             {"2", "MILK", "1"},
-            {"3", "COFFEE", "1"},
+            {"3", "COFFEE", "1"},     // Mocha
             {"3", "MILK", "1"},
             {"3", "CHOCOLATE", "1"},
-            {"4", "TEA", "1"}
+            {"4", "TEA", "1"},        // Tea
+            {"5", "COFFEE", "2"},     // Double Espresso
+            {"6", "CHOCOLATE", "2"},  // Hot Chocolate
+            {"6", "MILK", "1"},
+            {"7", "COFFEE", "1"},     // Coffee with extra milk
+            {"7", "MILK", "2"},
+            {"8", "COFFEE", "1"},     // Mocaccino
+            {"8", "MILK", "1"},
+            {"8", "CHOCOLATE", "2"}
     };
 
+
     public static void createSchemaForMachine(String instituteId, String machineId) {
-        try (Connection conn = DatabaseConnection.getConnection()) {
+        Connection conn = null;
+        try {
+            conn = DatabaseConnection.getConnection();
             conn.setAutoCommit(false);
 
-            // Create schema
-            String schemaName = String.format("machine_%s_%s", instituteId, machineId);
+            // Check if schema already exists
             try (Statement stmt = conn.createStatement()) {
-                stmt.execute(String.format(CREATE_SCHEMA, instituteId, machineId));
-
-                // Create custom types
-                stmt.execute(String.format(CREATE_CONSUMABLE_TYPE, instituteId, machineId));
-                stmt.execute(String.format(CREATE_FAULT_TYPE, instituteId, machineId));
-
-                // Create tables
-                for (String tableQuery : TABLE_CREATION) {
-                    stmt.execute(String.format(tableQuery, instituteId, machineId, instituteId, machineId,
-                            instituteId, machineId, instituteId, machineId));
+                ResultSet rs = stmt.executeQuery(String.format(CHECK_SCHEMA_EXISTS, instituteId, machineId));
+                if (rs.next()) {
+                    System.out.println("Schema already exists for machine " + machineId + " at institute " + instituteId);
+                    return;
                 }
-
-                // Insert initial consumables
-                String insertConsumable = String.format(
-                        "INSERT INTO machine_%s_%s.consumable (name, quantity, \"maxQuantity\") VALUES (CAST(? AS machine_%s_%s.\"ConsumableType\"), ?, ?)",
-                        instituteId, machineId, instituteId, machineId
-                );
-                try (PreparedStatement ps = conn.prepareStatement(insertConsumable)) {
-                    for (String[] consumable : INITIAL_CONSUMABLES) {
-                        ps.setString(1, consumable[0]);
-                        ps.setInt(2, Integer.parseInt(consumable[1]));
-                        ps.setInt(3, Integer.parseInt(consumable[2]));
-                        ps.executeUpdate();
-                    }
-                }
-
-                // Insert initial drinks
-                String insertDrink = String.format(
-                        "INSERT INTO machine_%s_%s.\"Drink\" (name, description, price, code) VALUES (?, ?, ?, ?)",
-                        instituteId, machineId
-                );
-                try (PreparedStatement ps = conn.prepareStatement(insertDrink)) {
-                    for (String[] drink : INITIAL_DRINKS) {
-                        ps.setString(1, drink[0]);
-                        ps.setString(2, drink[1]);
-                        ps.setBigDecimal(3, new java.math.BigDecimal(drink[2]));
-                        ps.setString(4, drink[3]);
-                        ps.executeUpdate();
-                    }
-                }
-
-                // Insert initial recipes
-                String insertRecipe = String.format(
-                        "INSERT INTO machine_%s_%s.\"Recipe\" (\"drinkCode\", \"consumableName\", \"consumableQuantity\") " +
-                                "VALUES (?, CAST(? AS machine_%s_%s.\"ConsumableType\"), ?)",
-                        instituteId, machineId, instituteId, machineId
-                );
-                try (PreparedStatement ps = conn.prepareStatement(insertRecipe)) {
-                    for (String[] recipe : INITIAL_RECIPES) {
-                        ps.setString(1, recipe[0]);
-                        ps.setString(2, recipe[1]);
-                        ps.setInt(3, Integer.parseInt(recipe[2]));
-                        ps.executeUpdate();
-                    }
-                }
-
-                // Insert default Machine values
-                String insertMachine = String.format(
-                        "INSERT INTO machine_%s_%s.\"Machine\" (\"totalBalance\", \"maxBalance\", \"faultStatus\", \"totalCredit\") " +
-                                "VALUES (0, 200, false, 0) " +
-                                "ON CONFLICT DO NOTHING",
-                        instituteId, machineId
-                );
-                stmt.execute(insertMachine);
             }
 
+            // Create schema and initialize
+            initializeSchema(conn, instituteId, machineId);
+
             conn.commit();
+            System.out.println("Successfully created and initialized schema for machine " + machineId);
+
         } catch (SQLException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Error creating schema for machine: " + e.getMessage());
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            throw new RuntimeException("Error creating schema for machine: " + e.getMessage(), e);
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private static void initializeSchema(Connection conn, String instituteId, String machineId) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            // Create schema
+            stmt.execute(String.format(CREATE_SCHEMA, instituteId, machineId));
+
+            // Create custom types
+            stmt.execute(String.format(CREATE_CONSUMABLE_TYPE, instituteId, machineId));
+            stmt.execute(String.format(CREATE_FAULT_TYPE, instituteId, machineId));
+
+            // Create tables
+            for (String tableQuery : TABLE_CREATION) {
+                stmt.execute(String.format(tableQuery, instituteId, machineId, instituteId, machineId,
+                        instituteId, machineId, instituteId, machineId));
+            }
+        }
+
+        // Initialize consumables
+        insertConsumables(conn, instituteId, machineId);
+
+        // Initialize drinks
+        insertDrinks(conn, instituteId, machineId);
+
+        // Initialize recipes
+        insertRecipes(conn, instituteId, machineId);
+
+        // Initialize machine
+        insertMachineDefaults(conn, instituteId, machineId);
+    }
+
+    private static void insertConsumables(Connection conn, String instituteId, String machineId) throws SQLException {
+        String insertConsumable = String.format(
+                "INSERT INTO machine_%s_%s.consumable (name, quantity, \"maxQuantity\") VALUES (CAST(? AS machine_%s_%s.\"ConsumableType\"), ?, ?)",
+                instituteId, machineId, instituteId, machineId
+        );
+        try (PreparedStatement ps = conn.prepareStatement(insertConsumable)) {
+            for (String[] consumable : INITIAL_CONSUMABLES) {
+                ps.setString(1, consumable[0]);
+                ps.setInt(2, Integer.parseInt(consumable[1]));
+                ps.setInt(3, Integer.parseInt(consumable[2]));
+                ps.executeUpdate();
+            }
+        }
+    }
+
+    private static void insertDrinks(Connection conn, String instituteId, String machineId) throws SQLException {
+        String insertDrink = String.format(
+                "INSERT INTO machine_%s_%s.\"Drink\" (name, description, price, code) VALUES (?, ?, ?, ?)",
+                instituteId, machineId
+        );
+        try (PreparedStatement ps = conn.prepareStatement(insertDrink)) {
+            for (String[] drink : INITIAL_DRINKS) {
+                ps.setString(1, drink[0]);
+                ps.setString(2, drink[1]);
+                ps.setBigDecimal(3, new java.math.BigDecimal(drink[2]));
+                ps.setString(4, drink[3]);
+                ps.executeUpdate();
+            }
+        }
+    }
+
+    private static void insertRecipes(Connection conn, String instituteId, String machineId) throws SQLException {
+        String insertRecipe = String.format(
+                "INSERT INTO machine_%s_%s.\"Recipe\" (\"drinkCode\", \"consumableName\", \"consumableQuantity\") " +
+                        "VALUES (?, CAST(? AS machine_%s_%s.\"ConsumableType\"), ?)",
+                instituteId, machineId, instituteId, machineId
+        );
+        try (PreparedStatement ps = conn.prepareStatement(insertRecipe)) {
+            for (String[] recipe : INITIAL_RECIPES) {
+                ps.setString(1, recipe[0]);
+                ps.setString(2, recipe[1]);
+                ps.setInt(3, Integer.parseInt(recipe[2]));
+                ps.executeUpdate();
+            }
+        }
+    }
+
+    private static void insertMachineDefaults(Connection conn, String instituteId, String machineId) throws SQLException {
+        String insertMachine = String.format(
+                "INSERT INTO machine_%s_%s.\"Machine\" (\"totalBalance\", \"maxBalance\", \"faultStatus\", \"totalCredit\") " +
+                        "VALUES (0, 200, false, 0) " +
+                        "ON CONFLICT DO NOTHING",
+                instituteId, machineId
+        );
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute(insertMachine);
         }
     }
 }
