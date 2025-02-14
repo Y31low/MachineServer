@@ -28,7 +28,7 @@ public class SchemaManager {
                     "END $$;";
 
     private static final String[] TABLE_CREATION = {
-            // Table creation queries remain the same as before
+
             "CREATE TABLE IF NOT EXISTS machine_%s_%s.\"Drink\" (" +
                     "    code text NOT NULL," +
                     "    price numeric NOT NULL," +
@@ -36,7 +36,7 @@ public class SchemaManager {
                     "    name text NOT NULL," +
                     "    CONSTRAINT \"Drink_pkey\" PRIMARY KEY (code)" +
                     ")",
-            // ... other table creation queries remain the same
+
             "CREATE TABLE IF NOT EXISTS machine_%s_%s.\"Fault\" (" +
                     "    description text NOT NULL," +
                     "    id_fault uuid NOT NULL," +
@@ -103,19 +103,19 @@ public class SchemaManager {
     };
 
     private static final String[][] INITIAL_RECIPES = {
-            {"1", "COFFEE", "1"},     // Espresso
-            {"2", "COFFEE", "1"},     // Cappuccino
+            {"1", "COFFEE", "1"},
+            {"2", "COFFEE", "1"},
             {"2", "MILK", "1"},
-            {"3", "COFFEE", "1"},     // Mocha
+            {"3", "COFFEE", "1"},
             {"3", "MILK", "1"},
             {"3", "CHOCOLATE", "1"},
-            {"4", "TEA", "1"},        // Tea
-            {"5", "COFFEE", "2"},     // Double Espresso
-            {"6", "CHOCOLATE", "2"},  // Hot Chocolate
+            {"4", "TEA", "1"},
+            {"5", "COFFEE", "2"},
+            {"6", "CHOCOLATE", "2"},
             {"6", "MILK", "1"},
-            {"7", "COFFEE", "1"},     // Coffee with extra milk
+            {"7", "COFFEE", "1"},
             {"7", "MILK", "2"},
-            {"8", "COFFEE", "1"},     // Mocaccino
+            {"8", "COFFEE", "1"},
             {"8", "MILK", "1"},
             {"8", "CHOCOLATE", "2"}
     };
@@ -127,7 +127,6 @@ public class SchemaManager {
             conn = DatabaseConnection.getConnection();
             conn.setAutoCommit(false);
 
-            // Check if schema already exists
             try (Statement stmt = conn.createStatement()) {
                 ResultSet rs = stmt.executeQuery(String.format(CHECK_SCHEMA_EXISTS, instituteId, machineId));
                 if (rs.next()) {
@@ -136,7 +135,6 @@ public class SchemaManager {
                 }
             }
 
-            // Create schema and initialize
             initializeSchema(conn, instituteId, machineId);
 
             conn.commit();
@@ -179,16 +177,15 @@ public class SchemaManager {
             }
         }
 
-        // Initialize consumables
         insertConsumables(conn, instituteId, machineId);
 
-        // Initialize drinks
+
         insertDrinks(conn, instituteId, machineId);
 
-        // Initialize recipes
+
         insertRecipes(conn, instituteId, machineId);
 
-        // Initialize machine
+
         insertMachineDefaults(conn, instituteId, machineId);
     }
 
